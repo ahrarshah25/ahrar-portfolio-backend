@@ -1,3 +1,5 @@
+import nodemailer from "nodemailer";
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -14,7 +16,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid JSON" });
     }
 
-    const { message } = body;
+    const { message, type } = body;
     if (!message) return res.status(400).json({ error: "Message is required" });
 
     const COHERE_API_KEY = process.env.COHERE_API_KEY;
@@ -68,12 +70,41 @@ Use this information to assist users effectively.
       }),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const errData = await response.json();
-      return res.status(response.status).json({ error: errData?.message || "Cohere API error" });
+      return res.status(response.status).json({ error: data?.message || "Cohere API error" });
     }
 
-    const data = await response.json();
+    if (type === "bug") {
+      try {
+        const transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: process.env.EMAIL,
+            pass: process.env.PASSWORD
+          }
+        });
+
+        await transporter.sendMail({
+          from: `"Portfolio AI" <${process.env.EMAIL}>`,
+          to: "ahrar.0932@gmail.com",
+          subject: "New Portfolio Bug Report",
+          text: `
+A new bug has been reported via AI Assistant.
+
+Issue:
+${message}
+
+Source: Portfolio AI Chat
+Action: Review and fix manually.
+`
+        });
+      } catch (mailErr) {
+        console.error("Bug email failed:", mailErr);
+      }
+    }
+
     let aiText = data?.message?.content?.[0]?.text || "No response from AI";
 
     aiText = aiText.replace(/[*]+/g, '').trim();
